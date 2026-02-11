@@ -1,0 +1,57 @@
+services:
+  db-primary:
+    image: postgres:17-alpine
+    container_name: postgres_primary
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+      REPLICATION_USER: replicator
+      REPLICATION_PASSWORD: replpassword
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: |
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c min_wal_size=1GB
+      -c max_wal_size=2GB
+      -c checkpoint_timeout=15min
+    ports:
+      - "5435:5432"
+    volumes:
+      - ./scripts/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+    networks:
+      - pg-net
+  
+  db-replica:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: mypassword
+      PGPASSWORD: replpassword
+      REPLICATION_USER: replicator
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./scripts/setup-replica.sh:/usr/local/bin/setup-replica.sh
+    entrypoint: ["/bin/bash", "/usr/local/bin/setup-replica.sh"]
+    depends_on:
+      - db-primary
+    networks:
+      - pg-net
+
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy_lb
+    volumes:
+     - ./configs/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+    - "5436:5432"
+    - "8404:8404"
+    depends_on:
+      - db-replica
+    networks:
+      - pg-net
+      
+networks:
+  pg-net:
+    driver: bridge
