@@ -8,7 +8,7 @@ The setup consists of the following components:
 
 - **Primary Database (`db-primary`)**: 
   - The master PostgreSQL instance where all write operations occur.
-  - Port: `5435` (mapped to internal `5432`).
+  - Accessed via HAProxy (Write Endpoint).
   - Configured with `wal_level=replica` to support replication.
 
 - **Replica Database (`db-replica`)**:
@@ -17,8 +17,9 @@ The setup consists of the following components:
   - Uses `pg_basebackup` to clone the primary's data on startup.
 
 - **HAProxy (`haproxy`)**:
-  - Load balancer that distributes read queries across the replica instances.
-  - Port: `5436` (Read-only access).
+  - Load balancer that manages traffic to the database cluster.
+  - **Write Endpoint (Port `5435`)**: Routes traffic to the Primary database.
+  - **Read Endpoint (Port `5436`)**: Distributes read queries across Replica instances.
   - Stats Port: `8404`.
 
 ## Prerequisites
@@ -56,13 +57,13 @@ You can also check the HAProxy status page at [http://localhost:8404](http://loc
 
 To confirm that replication is working, we will write data to the **Primary** database and read it from the **Replica** (via HAProxy).
 
-### Step 1: Write to Primary
+### Step 1: Write to Primary (via HAProxy)
 
-Connect to the Primary database (Port `5435`) and insert some data.
+Connect to the HAProxy Write Endpoint (Port `5435`). This traffic is routed to the Primary database.
 
 ```bash
-# Connect to Primary
-docker exec -it postgres_primary psql -U myuser -d mydatabase
+# Connect to Primary via HAProxy port
+PGPASSWORD=mypassword psql -h localhost -p 5435 -U myuser -d mydatabase
 ```
 
 Inside the SQL prompt:
